@@ -1,7 +1,12 @@
 # Documentation on how to structure the testfiles
-For every testfile you need to create a <testname>.c and a <testname>.h file. The <testname>.h file must be structured like this:
+For every testfile you need to create a <testgroup>.c and a <testgroup>.h file. The <testname>.h file must be structured like this:
 ```
+#ifndef MINI_TLS_<TESTGROUP>_H
+#define MINI_TLS_<TESTGROUP>_H
 
+void test_<testgroup>();
+
+#endif //MINI_TLS_<TESTGROUP>_H
 ```
 
 In the <testgroup>.c file you should implement in the pattern 
