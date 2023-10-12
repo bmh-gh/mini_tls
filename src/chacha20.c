@@ -9,6 +9,10 @@
 #define ROUNDS 10
 #endif
 
+#ifndef CHACHA20_MESSAGE_SIZE
+#define CHACHA20_MESSAGE_SIZE CHACHA20_KEY_STREAM_SIZE
+#endif
+
 static inline void ROTL(u32 *x, u32 n) {
     *x = (*x << n) | (*x >> (32 - n));
 }
@@ -16,6 +20,7 @@ static inline void ROTL(u32 *x, u32 n) {
 void init_chacha20_ctx(chacha20_ctx *ctx, u8 key[CHACHA20_KEY_SIZE], u8 nonce[CHACHA20_NONCE_SIZE]) {
     memcpy(ctx->key, key, CHACHA20_KEY_SIZE);
     memcpy(ctx->nonce, nonce, CHACHA20_NONCE_SIZE);
+    memset(ctx->key_stream, 0x00, CHACHA20_KEY_STREAM_SIZE);
     ctx->counter = 1;
 
     ctx->state[0] = 0x61707865;
@@ -46,21 +51,45 @@ static void quarter_round(u32 *a, u32 *b, u32 *c, u32 *d) {
     *c += *d,  *b ^= *c,  ROTL(b, 7);
 }
 
-void chacha20_block(chacha20_ctx *ctx) {
-    memcpy(ctx->old_state, ctx->state, 16*sizeof(uint32_t));
+static void chacha20_block(chacha20_ctx *ctx) {
+    ctx->state[12] = ctx->counter;
+    memcpy(ctx->working_state, ctx->state, 16*sizeof(uint32_t));
 
     for(int i = 0; i < ROUNDS; i++) {
-        quarter_round(&ctx->state[0], &ctx->state[4], &ctx->state[ 8], &ctx->state[12]);
-        quarter_round(&ctx->state[1], &ctx->state[5], &ctx->state[ 9], &ctx->state[13]);
-        quarter_round(&ctx->state[2], &ctx->state[6], &ctx->state[10], &ctx->state[14]);
-        quarter_round(&ctx->state[3], &ctx->state[7], &ctx->state[11], &ctx->state[15]);
+        quarter_round(&ctx->working_state[0], &ctx->working_state[4], &ctx->working_state[ 8], &ctx->working_state[12]);
+        quarter_round(&ctx->working_state[1], &ctx->working_state[5], &ctx->working_state[ 9], &ctx->working_state[13]);
+        quarter_round(&ctx->working_state[2], &ctx->working_state[6], &ctx->working_state[10], &ctx->working_state[14]);
+        quarter_round(&ctx->working_state[3], &ctx->working_state[7], &ctx->working_state[11], &ctx->working_state[15]);
 
-        quarter_round(&ctx->state[0], &ctx->state[5], &ctx->state[10], &ctx->state[15]);
-        quarter_round(&ctx->state[1], &ctx->state[6], &ctx->state[11], &ctx->state[12]);
-        quarter_round(&ctx->state[2], &ctx->state[7], &ctx->state[ 8], &ctx->state[13]);
-        quarter_round(&ctx->state[3], &ctx->state[4], &ctx->state[ 9], &ctx->state[14]);
+        quarter_round(&ctx->working_state[0], &ctx->working_state[5], &ctx->working_state[10], &ctx->working_state[15]);
+        quarter_round(&ctx->working_state[1], &ctx->working_state[6], &ctx->working_state[11], &ctx->working_state[12]);
+        quarter_round(&ctx->working_state[2], &ctx->working_state[7], &ctx->working_state[ 8], &ctx->working_state[13]);
+        quarter_round(&ctx->working_state[3], &ctx->working_state[4], &ctx->working_state[ 9], &ctx->working_state[14]);
     }
 
-    for(int i = 0; i < 16; i++)
-        ctx->state[i] += ctx->old_state[i];
+    u32 kw = 0;
+    for(int i = 0; i < 16; i++) {
+        kw = ctx->state[i] + ctx->working_state[i];
+
+        ctx->key_stream[4 * i] = kw & 0xff;
+        ctx->key_stream[4 * i + 1] = kw >> 8;
+        ctx->key_stream[4 * i + 2] = kw >> 16;
+        ctx->key_stream[4 * i + 3] = kw >> 24;
+    }
+}
+
+void chacha20_xcrypt(chacha20_ctx *ctx, u8 *message, u32 m_len) {
+    size_t message_length = 0;
+    while(m_len > 0) {
+        message_length = (m_len < CHACHA20_MESSAGE_SIZE) ? m_len : CHACHA20_MESSAGE_SIZE;
+
+        chacha20_block(ctx);
+        for(int i = 0; i < message_length; i++) {
+            message[i] ^= ctx->key_stream[i];
+        }
+
+        ctx->counter++;
+        m_len -= message_length;
+        message += message_length;
+    }
 }
