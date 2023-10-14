@@ -7,7 +7,6 @@
 
 #include "types.h"
 
-#define AES_INTERNAL_STATE_SIZE
 #define AES_128_KEY_SIZE 16
 #define AES_128_ROUNDS 11
 #define AES_256_KEY_SIZE 32
@@ -52,6 +51,8 @@ const u8 InvSBox[16][16] = {
         {0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D}
 };
 
+const u16 poly = 0x11B;
+
 typedef struct {
     u8 in[16];
     u8 out[16];
@@ -61,6 +62,5 @@ typedef struct {
 void aes128_init(aes128_ctx *ctx, u8 key[AES_128_KEY_SIZE]);
 void aes128_cipher(aes128_ctx *ctx);
 void aes128_decipher(aes128_ctx *ctx);
-
 
 #endif //MINI_TLS_AES_CORE_H
