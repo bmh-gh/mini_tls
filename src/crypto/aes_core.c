@@ -10,9 +10,19 @@ static inline u8 sub_byte(u8 b) {
     return SBox[b>>4][b&0xF];
 }
 
+static inline u8 inv_sub_byte(u8 b) {
+    return InvSBox[b>>4][b&0xF];
+}
+
 static void sub_bytes(u8 state[16]) {
     for(int i = 0; i < 16; i++) {
        state[i] = sub_byte(state[i]);
+    }
+}
+
+static void inv_sub_bytes(u8 state[16]) {
+    for(int i = 0; i < 16; i++) {
+        state[i] = inv_sub_byte(state[i]);
     }
 }
 
@@ -37,6 +47,27 @@ static void shift_rows(u8 state[16]) {
     state[3] = tmp;
 }
 
+static void inv_shift_rows(u8 state[16]) {
+    u8 tmp = state[1];
+    state[1] = state[13];
+    state[9] = state[5];
+    state[13] = state[9];
+    state[5] = tmp;
+
+    tmp = state[10];
+    state[10] = state[2];
+    state[2] = tmp;
+    tmp = state[6];
+    state[6] = state[14];
+    state[14] = tmp;
+
+    tmp = state[3];
+    state[3] = state[7];
+    state[7] = state[11];
+    state[11] = state[15];
+    state[15] = tmp;
+}
+
 static u8 x_time(u8 a) {
     if(a & 0x80)
         return (a << 1) ^ 0x1B;
@@ -53,6 +84,10 @@ static void mix_columns(u8 state[16]) {
         new_state[i + 3] = (x_time(state[i]) ^ state[i]) ^ state[i + 1] ^ state[i + 2] ^ x_time(state[i + 3]);
     }
     memcpy(state, new_state, 16);
+}
+
+static void inv_mix_columns(u8 state[16]) {
+
 }
 
 static u32 g(u8 state[4], u8 rc) {
@@ -97,4 +132,19 @@ void aes128_cipher(aes128_ctx *ctx) {
     shift_rows(state);
     key_addition(state, ctx->ks[10]);
     memcpy(ctx->out, state, 16);
+}
+
+void aes128_decipher(aes128_ctx *ctx) {
+    u8 state[16];
+    memcpy(state, ctx->in, 16);
+    key_addition(state, ctx->ks[10]);
+    inv_shift_rows(state);
+    inv_sub_bytes(state);
+    for(int i = AES_128_ROUNDS - 2; i > 0; i--) {
+        key_addition(state, ctx->ks[i]);
+        inv_mix_columns(state);
+        inv_shift_rows(state);
+        inv_sub_bytes(state);
+    }
+    key_addition(state, ctx->ks[0]);
 }
