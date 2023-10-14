@@ -5,7 +5,7 @@
 
 #include <string.h>
 
-static u8 sub_byte(u8 b) {
+static inline u8 sub_byte(u8 b) {
     return SBox[b>>4][b&0xF];
 }
 
@@ -24,7 +24,7 @@ void aes128_key_schedule(aes128_ctx *ctx, const u8 key[16]) {
     u8 w[16];
     memcpy(w, key, 16);
     for(int i = 1; i < AES_128_ROUNDS; i++) {
-        *(u32*)w ^= g(w, Rcon[i-1]);
+        *(u32*)w ^= g((w + 12), Rcon[i-1]);
         (*(u32*)(w + 4)) ^= (*(u32*)w);
         (*(u32*)(w + 8)) ^= (*(u32*)(w + 4));
         (*(u32*)(w + 12)) ^= (*(u32*)(w + 8));
