@@ -128,7 +128,7 @@ static u32 g(u8 state[4], u8 rc) {
     return (*(u32*)new_state);
 }
 
-static inline void key_addition(u8 state[16], u8 key[16]) {
+static inline void key_addition(u8 state[16], const u8 key[16]) {
     *(u64*) state ^= *(u64*) key;
     *(u64*) (state + 8) ^= *(u64*) (key + 8);
 }
@@ -176,4 +176,8 @@ void aes128_decipher(aes128_ctx *ctx) {
     }
     key_addition(state, ctx->ks[0]);
     memcpy(ctx->out, state, 16);
+}
+
+void aes128_init(aes128_ctx *ctx, u8 key[AES_128_KEY_SIZE]) {
+    aes128_key_schedule(ctx, key);
 }
