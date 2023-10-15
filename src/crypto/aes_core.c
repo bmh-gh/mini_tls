@@ -4,7 +4,6 @@
 #include "../../include/aes_core.h"
 
 #include <string.h>
-#include <stdio.h>
 
 static inline u8 sub_byte(u8 b) {
     return SBox[b>>4][b&0xF];
@@ -50,8 +49,8 @@ static void shift_rows(u8 state[16]) {
 static void inv_shift_rows(u8 state[16]) {
     u8 tmp = state[1];
     state[1] = state[13];
-    state[9] = state[5];
     state[13] = state[9];
+    state[9] = state[5];
     state[5] = tmp;
 
     tmp = state[10];
@@ -75,6 +74,14 @@ static u8 x_time(u8 a) {
         return a << 1;
 }
 
+static inline u8 xx_time(u8 a) {
+    return x_time(x_time(a));
+}
+
+static inline u8 xxx_time(u8 a) {
+    return x_time(x_time(x_time(a)));
+}
+
 static void mix_columns(u8 state[16]) {
     u8 new_state[16] = {0};
     for(int i = 0; i < 13; i += 4) {
@@ -86,8 +93,29 @@ static void mix_columns(u8 state[16]) {
     memcpy(state, new_state, 16);
 }
 
-static void inv_mix_columns(u8 state[16]) {
 
+static inline u8 times_e(u8 a) {
+    return xxx_time(a) ^ xx_time(a) ^ x_time(a);
+}
+static inline u8 times_d(u8 a) {
+    return xxx_time(a) ^ xx_time(a) ^ a;
+}
+static inline u8 times_b(u8 a) {
+    return xxx_time(a) ^ x_time(a) ^ a;
+}
+static inline u8 times_9(u8 a) {
+    return xxx_time(a) ^ a;
+}
+
+static void inv_mix_columns(u8 state[16]) {
+    u8 new_state[16] = {0};
+    for (int i = 0; i < 13; i += 4) {
+        new_state[i] = times_e(state[i]) ^ times_b(state[i + 1]) ^ times_d(state[i + 2]) ^ times_9(state[i + 3]);
+        new_state[i + 1] = times_9(state[i]) ^ times_e(state[i + 1]) ^ times_b(state[i + 2]) ^ times_d(state[i + 3]);
+        new_state[i + 2] = times_d(state[i]) ^ times_9(state[i + 1]) ^ times_e(state[i + 2]) ^ times_b(state[i + 3]);
+        new_state[i + 3] = times_b(state[i]) ^ times_d(state[i + 1]) ^ times_9(state[i + 2]) ^ times_e(state[i + 3]);
+    }
+    memcpy(state, new_state, 16);
 }
 
 static u32 g(u8 state[4], u8 rc) {
@@ -147,4 +175,5 @@ void aes128_decipher(aes128_ctx *ctx) {
         inv_sub_bytes(state);
     }
     key_addition(state, ctx->ks[0]);
+    memcpy(ctx->out, state, 16);
 }
