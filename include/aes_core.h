@@ -8,8 +8,9 @@
 #include "types.h"
 
 #define AES_128_KEY_SIZE 16
-#define AES_128_ROUNDS 11
+#define AES_128_ROUNDS 10
 #define AES_256_KEY_SIZE 32
+#define AES_256_ROUNDS 14
 
 const u8 Rcon[14] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36, 0x6C, 0xD8, 0xAB, 0x4D};
 
@@ -62,5 +63,15 @@ typedef struct {
 void aes128_init(aes128_ctx *ctx, u8 key[AES_128_KEY_SIZE]);
 void aes128_cipher(aes128_ctx *ctx);
 void aes128_decipher(aes128_ctx *ctx);
+
+typedef struct {
+    u8 in[16];
+    u8 out[16];
+    u8 ks[15][16];
+} aes256_ctx;
+
+void aes256_init(aes256_ctx *ctx, u8 key[AES_256_KEY_SIZE]);
+void aes256_cipher(aes256_ctx *ctx);
+void aes256_decipher(aes256_ctx *ctx);
 
 #endif //MINI_TLS_AES_CORE_H

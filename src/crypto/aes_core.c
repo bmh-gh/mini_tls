@@ -137,7 +137,7 @@ void aes128_key_schedule(aes128_ctx *ctx, const u8 key[16]) {
     memcpy(ctx->ks[0], key, 16);
     u8 w[16];
     memcpy(w, key, 16);
-    for(int i = 1; i < AES_128_ROUNDS; i++) {
+    for(int i = 1; i < AES_128_ROUNDS + 1; i++) {
         *(u32*)w ^= g((w + 12), Rcon[i-1]);
         (*(u32*)(w + 4)) ^= (*(u32*)w);
         (*(u32*)(w + 8)) ^= (*(u32*)(w + 4));
@@ -150,7 +150,7 @@ void aes128_cipher(aes128_ctx *ctx) {
     u8 state[16];
     memcpy(state, ctx->in, 16);
     key_addition(state, ctx->ks[0]);
-    for(int i = 1; i < AES_128_ROUNDS - 1; i++) {
+    for(int i = 1; i < AES_128_ROUNDS; i++) {
         sub_bytes(state);
         shift_rows(state);
         mix_columns(state);
@@ -168,7 +168,7 @@ void aes128_decipher(aes128_ctx *ctx) {
     key_addition(state, ctx->ks[10]);
     inv_shift_rows(state);
     inv_sub_bytes(state);
-    for(int i = AES_128_ROUNDS - 2; i > 0; i--) {
+    for(int i = AES_128_ROUNDS - 1; i > 0; i--) {
         key_addition(state, ctx->ks[i]);
         inv_mix_columns(state);
         inv_shift_rows(state);
@@ -180,4 +180,49 @@ void aes128_decipher(aes128_ctx *ctx) {
 
 void aes128_init(aes128_ctx *ctx, u8 key[AES_128_KEY_SIZE]) {
     aes128_key_schedule(ctx, key);
+}
+
+static u32 h(u8 state[4]) {
+    u8 new_state[4] = {
+            sub_byte(state[0]),
+            sub_byte(state[1]),
+            sub_byte(state[2]),
+            sub_byte(state[3])
+    };
+    return (*(u32*)new_state);
+}
+
+void aes256_key_schedule(aes256_ctx *ctx, const u8 key[32]) {
+    memcpy(ctx->ks[0], key, 16);
+    memcpy(ctx->ks[1], (key + 16), 16);
+    u8 w[32];
+    memcpy(w, key, 32);
+    for(int i = 2; i <= 12; i+=2) {
+        *(u32*)w ^= g((w + 28), Rcon[i- (i / 2) - 1]);
+        (*(u32*)(w + 4)) ^= (*(u32*)w);
+        (*(u32*)(w + 8)) ^= (*(u32*)(w + 4));
+        (*(u32*)(w + 12)) ^= (*(u32*)(w + 8));
+        (*(u32*)(w + 16)) ^= h((w + 12));
+        (*(u32*)(w + 20)) ^= (*(u32*)(w + 16));
+        (*(u32*)(w + 24)) ^= (*(u32*)(w + 20));
+        (*(u32*)(w + 28)) ^= (*(u32*)(w + 24));
+        memcpy(ctx->ks[i], w, 16);
+        memcpy(ctx->ks[i + 1], (w + 16), 16);
+    }
+    *(u32*)w ^= g((w + 28), Rcon[6]);
+    (*(u32*)(w + 4)) ^= (*(u32*)w);
+    (*(u32*)(w + 8)) ^= (*(u32*)(w + 4));
+    (*(u32*)(w + 12)) ^= (*(u32*)(w + 8));
+    memcpy(ctx->ks[14], w, 16);
+}
+
+
+void aes256_init(aes256_ctx *ctx, u8 key[AES_256_KEY_SIZE]) {
+    aes256_key_schedule(ctx, key);
+}
+void aes256_cipher(aes256_ctx *ctx) {
+
+}
+void aes256_decipher(aes256_ctx *ctx) {
+
 }
