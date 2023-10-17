@@ -4,6 +4,9 @@
 #include "../../include/aes_core.h"
 
 #include <string.h>
+#include <time.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 static inline u8 sub_byte(u8 b) {
     return SBox[b>>4][b&0xF];
@@ -221,8 +224,32 @@ void aes256_init(aes256_ctx *ctx, u8 key[AES_256_KEY_SIZE]) {
     aes256_key_schedule(ctx, key);
 }
 void aes256_cipher(aes256_ctx *ctx) {
-
+    u8 state[16];
+    memcpy(state, ctx->in, 16);
+    key_addition(state, ctx->ks[0]);
+    for(int i = 1; i < AES_256_ROUNDS; i++) {
+        sub_bytes(state);
+        shift_rows(state);
+        mix_columns(state);
+        key_addition(state, ctx->ks[i]);
+    }
+    sub_bytes(state);
+    shift_rows(state);
+    key_addition(state, ctx->ks[14]);
+    memcpy(ctx->out, state, 16);
 }
 void aes256_decipher(aes256_ctx *ctx) {
-
+    u8 state[16];
+    memcpy(state, ctx->in, 16);
+    key_addition(state, ctx->ks[14]);
+    inv_shift_rows(state);
+    inv_sub_bytes(state);
+    for(int i = AES_256_ROUNDS - 1; i > 0; i--) {
+        key_addition(state, ctx->ks[i]);
+        inv_mix_columns(state);
+        inv_shift_rows(state);
+        inv_sub_bytes(state);
+    }
+    key_addition(state, ctx->ks[0]);
+    memcpy(ctx->out, state, 16);
 }
