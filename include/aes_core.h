@@ -51,25 +51,12 @@ const u8 InvSBox[16][16] = {
         {0xA0, 0xE0, 0x3B, 0x4D, 0xAE, 0x2A, 0xF5, 0xB0, 0xC8, 0xEB, 0xBB, 0x3C, 0x83, 0x53, 0x99, 0x61},
         {0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D}
 };
-//TODO: Remove structs when unnecessary and add params to cipher fun's
-typedef struct {
-    u8 in[16];
-    u8 out[16];
-    u8 ks[11][16];
-} aes128_ctx;
 
-void aes128_init(aes128_ctx *ctx, u8 key[AES_128_KEY_SIZE]);
-void aes128_cipher(aes128_ctx *ctx);
-void aes128_decipher(aes128_ctx *ctx);
+void aes128_cipher(const u8 *in, u8 *out, u8 *w);
+void aes128_decipher(u8 *in, u8 *out, u8 *w);
 
-typedef struct {
-    u8 in[16];
-    u8 out[16];
-    u8 ks[15][16];
-} aes256_ctx;
 
-void aes256_init(aes256_ctx *ctx, u8 key[AES_256_KEY_SIZE]);
-void aes256_cipher(aes256_ctx *ctx);
-void aes256_decipher(aes256_ctx *ctx);
+void aes256_cipher(u8 *in, u8 *out, u8 *w);
+void aes256_decipher(u8 *in, u8 *out, u8 *w);
 
 #endif //MINI_TLS_AES_CORE_H

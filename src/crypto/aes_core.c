@@ -4,6 +4,11 @@
 #include "../../include/aes_core.h"
 
 #include <string.h>
+// Reverse the endianness of an u32
+#define REV_END_U32(n) (((n>>24)&0xff) |  ((n<<8)&0xff0000) |  ((n>>8)&0xff00) | ((n<<24)&0xff000000))
+// The endianness of u32 is reversed if extracted from u8 array
+#define U8_TO_U32(n) REV_END_U32(*(u32*)(n))
+#define U32_TO_U8(o, s) ((*(u32*)(o)) = REV_END_U32(s))
 
 /*
  * T-Tables:
@@ -419,51 +424,64 @@ static void inv_mix_columns(u8 state[16]) {
     memcpy(state, new_state, 16);
 }
 
-static u32 g(u8 state[4], u8 rc) {
-    u8 new_state[4] = {
-            sub_byte(state[1]) ^ rc,
-            sub_byte(state[2]),
-            sub_byte(state[3]),
-            sub_byte(state[0])
-    };
-    return (*(u32*)new_state);
+static u32 g(u32 state, u8 rc) {
+    //TODO: Sub this shit
+    return (state ^ rc);
 }
 
-static inline void key_addition(u8 state[16], const u8 key[16]) {
-    *(u64*) state ^= *(u64*) key;
-    *(u64*) (state + 8) ^= *(u64*) (key + 8);
-}
 
-void aes128_key_schedule(aes128_ctx *ctx, const u8 key[16]) {
-    memcpy(ctx->ks[0], key, 16);
-    u8 w[16];
-    memcpy(w, key, 16);
-    for(int i = 1; i < AES_128_ROUNDS + 1; i++) {
-        *(u32*)w ^= g((w + 12), Rcon[i-1]);
-        (*(u32*)(w + 4)) ^= (*(u32*)w);
-        (*(u32*)(w + 8)) ^= (*(u32*)(w + 4));
-        (*(u32*)(w + 12)) ^= (*(u32*)(w + 8));
-        memcpy(ctx->ks[i], w, 16);
+void aes128_key_schedule(const u8 key[16], u32 *w) {
+    w[0] = U8_TO_U32(key +  0);
+    w[1] = U8_TO_U32(key +  4);
+    w[2] = U8_TO_U32(key +  8);
+    w[3] = U8_TO_U32(key + 12);
+    for(int i = 0; i < AES_128_ROUNDS; i++) {
+        w[i + 4] ^= g((w[i + 3]), Rcon[i]);
+        w[i + 5] ^= w[i + 4];
+        w[i + 6] ^= w[i + 5];
+        w[i + 7] ^= w[i + 6];
     }
 }
 
-void aes128_cipher(aes128_ctx *ctx) {
-    u8 state[16];
-    memcpy(state, ctx->in, 16);
-    key_addition(state, ctx->ks[0]);
-    for(int i = 1; i < AES_128_ROUNDS; i++) {
-        sub_bytes(state);
-        shift_rows(state);
-        mix_columns(state);
-        key_addition(state, ctx->ks[i]);
+void aes_cipher(const u8 *in, u8 *out, u8 *w, u8 nr) {
+    u32 s0, tmp0, s1, tmp1, s2, tmp2, s3, tmp3;
+    s0 = U8_TO_U32(in);
+    s1 = U8_TO_U32(in + 4);
+    s2 = U8_TO_U32(in + 8);
+    s3 = U8_TO_U32(in + 12);
+    // Key Addition
+    s0 ^= w[0];
+    s1 ^= w[1];
+    s2 ^= w[2];
+    s3 ^= w[3];
+    // Rounds 1 to nr - 1
+    for(int i = 1; i < nr - 1; i++) {
+        tmp0 = Tenc0[s0 >> 24] ^ Tenc1[(s1 >> 16) & 0xff] ^ Tenc2[(s2 >> 8) & 0xff] ^ Tenc3[(s3) & 0xff] ^ w[i + 4];
+        tmp1 = Tenc0[s1 >> 24] ^ Tenc1[(s2 >> 16) & 0xff] ^ Tenc2[(s3 >> 8) & 0xff] ^ Tenc3[(s2) & 0xff] ^ w[i + 5];
+        tmp2 = Tenc0[s2 >> 24] ^ Tenc1[(s3 >> 16) & 0xff] ^ Tenc2[(s1 >> 8) & 0xff] ^ Tenc3[(s1) & 0xff] ^ w[i + 6];
+        tmp3 = Tenc0[s3 >> 24] ^ Tenc1[(s0 >> 16) & 0xff] ^ Tenc2[(s0 >> 8) & 0xff] ^ Tenc3[(s0) & 0xff] ^ w[i + 7];
+        s0 = tmp0;
+        s1 = tmp1;
+        s2 = tmp2;
+        s3 = tmp3;
     }
-    sub_bytes(state);
-    shift_rows(state);
-    key_addition(state, ctx->ks[10]);
-    memcpy(ctx->out, state, 16);
+    // Last round; deploy state so sN can be overwritten
+    s0 = Tenc0[s0 >> 24] ^ Tenc1[(s1 >> 16) & 0xff] ^ Tenc2[(s2 >> 8) & 0xff] ^ Tenc3[(s3) & 0xff] ^ w[(nr * 4) - 4];
+    U32_TO_U8(out, s0);
+    s1 = Tenc0[s1 >> 24] ^ Tenc1[(s2 >> 16) & 0xff] ^ Tenc2[(s3 >> 8) & 0xff] ^ Tenc3[(s2) & 0xff] ^ w[(nr * 4) - 3];
+    U32_TO_U8(out + 4, s1);
+    s2 = Tenc0[s2 >> 24] ^ Tenc1[(s3 >> 16) & 0xff] ^ Tenc2[(s1 >> 8) & 0xff] ^ Tenc3[(s1) & 0xff] ^ w[(nr * 4) - 2];
+    U32_TO_U8(out + 8, s2);
+    s3 = Tenc0[s3 >> 24] ^ Tenc1[(s0 >> 16) & 0xff] ^ Tenc2[(s0 >> 8) & 0xff] ^ Tenc3[(s0) & 0xff] ^ w[(nr * 4) - 1];
+    U32_TO_U8(out + 12, s3);
 }
 
-void aes128_decipher(aes128_ctx *ctx) {
+int main(int args, char **argv) {
+
+}
+
+/*
+void aes128_decipher(u8 *in, u8 *out, u8 *w) {
     u8 state[16];
     memcpy(state, ctx->in, 16);
     key_addition(state, ctx->ks[10]);
@@ -479,9 +497,6 @@ void aes128_decipher(aes128_ctx *ctx) {
     memcpy(ctx->out, state, 16);
 }
 
-void aes128_init(aes128_ctx *ctx, u8 key[AES_128_KEY_SIZE]) {
-    aes128_key_schedule(ctx, key);
-}
 
 static u32 h(u8 state[4]) {
     u8 new_state[4] = {
@@ -518,10 +533,7 @@ void aes256_key_schedule(aes256_ctx *ctx, const u8 key[32]) {
 }
 
 
-void aes256_init(aes256_ctx *ctx, u8 key[AES_256_KEY_SIZE]) {
-    aes256_key_schedule(ctx, key);
-}
-void aes256_cipher(aes256_ctx *ctx) {
+void aes256_cipher(u8 *in, u8 *out, u8 *w) {
     u8 state[16];
     memcpy(state, ctx->in, 16);
     key_addition(state, ctx->ks[0]);
@@ -536,7 +548,7 @@ void aes256_cipher(aes256_ctx *ctx) {
     key_addition(state, ctx->ks[14]);
     memcpy(ctx->out, state, 16);
 }
-void aes256_decipher(aes256_ctx *ctx) {
+void aes256_decipher(u8 *in, u8 *out, u8 *w) {
     u8 state[16];
     memcpy(state, ctx->in, 16);
     key_addition(state, ctx->ks[14]);
@@ -551,3 +563,4 @@ void aes256_decipher(aes256_ctx *ctx) {
     key_addition(state, ctx->ks[0]);
     memcpy(ctx->out, state, 16);
 }
+ */
